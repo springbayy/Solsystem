@@ -37,7 +37,7 @@ def createBodies():
     comet = deepcopy(earth)
     comet.poslist[0][0] -= 300000e3
     comet.poslist[0][2] += 100000e3
-    comet.vellist[0][0] += 1.48e3
+    comet.vellist[0][0] += 1.485e3
     comet.name = "comet"
     comet.mass = 7e10
     list.append(comet)
@@ -72,7 +72,7 @@ class Simulation():
     def __init__(self):
         self.planets=createBodies()
         self.nsteps=int(5e4)
-        self.simulationTime=(365*24*60*60)
+        self.simulationTime=(365*24*60*60)*2
         self.dt=int(self.simulationTime/self.nsteps)
         self.time=[0]
 
@@ -162,7 +162,9 @@ class Simulation():
                 y.append(poslist[j][1])
                 z.append(poslist[j][2])
             ax.plot(x, y, z, label=self.planets[i].name)
-            ax.legend()
+
+        ax.scatter([0], [0], [0], color="orange", s=20, label="Sun")
+        ax.legend()
         plt.show()
 
     #plot with an arbitrary object in it's center, ex earth an moon
@@ -174,6 +176,7 @@ class Simulation():
         for i in range(len(self.planets)):
             if self.planets[i].name==body:
                 target_index=i
+        print(target_index)
         ref_pos=self.planets[target_index].poslist
         ax = plt.figure().add_subplot(projection='3d')
 
@@ -181,8 +184,8 @@ class Simulation():
         patches=[]
 
         for i in range(len(self.planets)):
-            if self.planets[i].name=="body":
-                break
+            if i==target_index:
+                continue
             broken=False
             inScope=False
             x = []
@@ -213,6 +216,9 @@ class Simulation():
             if inScope is True:
                 patches.append(mpatches.Patch(color=colourlist[i], label=self.planets[i].name))
 
+        ax.scatter([0], [0], [0], color="b", s=10)
+        patches.append(mpatches.Patch(color="b", label=self.planets[target_index].name))
+
         plt.legend(handles=patches)
         ax.set_xlim([-distlimit, distlimit])
         ax.set_ylim([-distlimit, distlimit])
@@ -240,6 +246,6 @@ class Simulation():
 sim=Simulation()
 sim.propegate()
 sim.plot_3d()
-sim.plot_object("earth", 3)
+sim.plot_object("Earth", 3)
 sim.plot_energy()
 
