@@ -1,0 +1,245 @@
+import numpy as np
+import numpy.linalg as lin
+from copy import deepcopy
+import matplotlib.patches as mpatches
+
+import matplotlib.pyplot as plt
+
+G= 6.67408*(10**-11)
+
+#defines objects and their properties
+class body():
+    def __init__(self, xPos, yPos, zpos, xVel, yVel, zvel,  mass, name):
+        self.poslist=[np.array([xPos, yPos, zpos])]
+        self.vellist=[np.array([xVel, yVel, zvel])]
+        self.acclist=[]
+        self.mass=mass
+        self.name=name
+
+
+#function returns a list of body-objects
+def createBodies():
+    list=[]
+    earth=body(0, 1.496e11,0, 29.78e3,0,0, 5.972e24, "Earth")
+    sun = body(0,0,0,0,0,0,1.989e30, "Sun")
+
+    list.append(earth)
+    list.append(sun)
+
+
+    moon=deepcopy(earth)
+    moon.poslist[0][0]+=284400e3
+    moon.vellist[0][1]+=1.022e3
+    moon.name="Moon"
+    moon.mass=7.34e22
+    list.append(moon)
+
+    comet = deepcopy(earth)
+    comet.poslist[0][0] -= 300000e3
+    comet.poslist[0][2] += 100000e3
+    comet.vellist[0][0] += 1.48e3
+    comet.name = "comet"
+    comet.mass = 7e10
+    list.append(comet)
+
+    webb = deepcopy(earth)
+    webb.name = "webb"
+    webb.mass = 1000
+    webb.poslist[0][1]= (earth.poslist[0][1]*(1+(earth.mass/(3*sun.mass))**(1/3)))
+    webb.vellist[0][0]=earth.vellist[0][0]*(webb.poslist[0][1]/earth.poslist[0][1])
+    #list.append(webb)
+
+    return list
+
+#returns vector of force for two objects
+def calculateForce(pos1, m1, pos2, m2):
+    dSquared=((lin.norm(pos1-pos2))**2)
+    vector=pos2-pos1
+    nVector=vector/lin.norm(pos1-pos2)
+    F=G*(m1*m2)/dSquared
+
+    return F*nVector
+
+#RK4 propegator
+def rk4(pos, vel, acc, dt):
+    a1=acc*dt
+    b1=vel*dt
+
+
+
+#main class which holds the whole simulation
+class Simulation():
+    def __init__(self):
+        self.planets=createBodies()
+        self.nsteps=int(5e4)
+        self.simulationTime=(365*24*60*60)
+        self.dt=int(self.simulationTime/self.nsteps)
+        self.time=[0]
+
+
+    #propegates with velocity verlet
+    def propegate(self):
+        l=len(self.planets)
+
+        #initial acceleration
+        for i in range(l):
+            for j in range(i+1, l):
+                planet1=self.planets[i]
+                planet2=self.planets[j]
+                force=calculateForce(planet1.poslist[0], planet1.mass, planet2.poslist[0], planet2. mass)
+                planet1.acclist.append(force/planet1.mass)
+                planet2.acclist.append(force/-planet2.mass)
+
+
+        for i in range(1, self.nsteps):
+
+            #Propegate pos
+            for j in range(l):
+                planet=self.planets[j]
+                dt=self.dt
+                pos=planet.poslist[-1]
+                vel=planet.vellist[-1]
+                acc=planet.acclist[-1]
+
+                planet.poslist.append(pos+(dt*vel)+(0.5*acc*(dt**2)))
+
+                #planet.poslist.append(np.array(pos+(dt*vel)))
+
+
+            #recalculate vel and acc
+            for j in range(l):
+                for k in range(j + 1, l):
+                    planet1 = self.planets[j]
+                    planet2 = self.planets[k]
+                    force = calculateForce(planet1.poslist[-1], planet1.mass, planet2.poslist[-1], planet2.mass)
+                    planet1.acclist.append(force / planet1.mass)
+                    planet2.acclist.append(force / -planet2.mass)
+
+                    planet1.vellist.append(planet1.vellist[-1] + self.dt*(planet1.acclist[-2]+planet1.acclist[-1])/2)
+                    planet2.vellist.append(planet2.vellist[-1] + self.dt * (planet2.acclist[-2] + planet2.acclist[-1]) / 2)
+
+                    #planet1.vellist.append(planet1.vellist[-1] + self.dt * planet1.acclist[-1])
+                    #planet2.vellist.append(planet2.vellist[-1] + self.dt * planet2.acclist[-1])
+
+
+            self.time.append(i*dt)
+
+    #plot 2d projection of system and time on z-axis
+    def plot_elliptic(self):
+        ax = plt.figure().add_subplot(projection='3d')
+        for i in range(len(self.planets)):
+            x=[]
+            y=[]
+            poslist=self.planets[i].poslist
+            for j in range(len(poslist)):
+                x.append(poslist[j][0])
+                y.append(poslist[j][1])
+            ax.plot(x, y, self.time, label=self.planets[i].name)
+            ax.legend()
+        plt.show()
+
+    def plot_2d(self):
+        for i in range(len(self.planets)):
+            x=[]
+            y=[]
+            poslist=self.planets[i].poslist
+            for j in range(len(poslist)):
+                x.append(poslist[j][0])
+                y.append(poslist[j][1])
+            plt.plot(x, y)
+        plt.show()
+
+    #plots trajectory in 3d
+    def plot_3d(self):
+        ax = plt.figure().add_subplot(projection='3d')
+        for i in range(len(self.planets)):
+            x=[]
+            y=[]
+            z=[]
+            poslist=self.planets[i].poslist
+            for j in range(len(poslist)):
+                x.append(poslist[j][0])
+                y.append(poslist[j][1])
+                z.append(poslist[j][2])
+            ax.plot(x, y, z, label=self.planets[i].name)
+            ax.legend()
+        plt.show()
+
+    #plot with an arbitrary object in it's center, ex earth an moon
+    #dim=3 gives 3d
+    #dim=2 gives 2d projection
+    def plot_object(self, body, dim):
+        target_index = 0
+        distlimit=300000e3
+        for i in range(len(self.planets)):
+            if self.planets[i].name==body:
+                target_index=i
+        ref_pos=self.planets[target_index].poslist
+        ax = plt.figure().add_subplot(projection='3d')
+
+        colourlist="byrgmc"
+        patches=[]
+
+        for i in range(len(self.planets)):
+            if self.planets[i].name=="body":
+                break
+            broken=False
+            inScope=False
+            x = []
+            y = []
+            z = []
+
+            for j in range(self.nsteps):
+                pos=(self.planets[i].poslist[j]-ref_pos[j])
+
+                if abs(pos[0])<distlimit and abs(pos[1])<distlimit and abs(pos[2])<distlimit:
+                    x.append(pos[0])
+                    y.append(pos[1])
+                    z.append(pos[2])
+                else:
+                    broken=True
+
+                if (broken is True and len(x)!=0) or (j==(self.nsteps-1) and len(x)!=0):
+                    if dim==3:
+                        ax.plot(x, y, z, color=colourlist[i])
+                    elif dim==2:
+                        ax.plot(x, y, self.time, color=colourlist[i])
+                    x=[]
+                    y=[]
+                    z=[]
+                    broken=False
+                    inScope=True
+
+            if inScope is True:
+                patches.append(mpatches.Patch(color=colourlist[i], label=self.planets[i].name))
+
+        plt.legend(handles=patches)
+        ax.set_xlim([-distlimit, distlimit])
+        ax.set_ylim([-distlimit, distlimit])
+        #ax.set_zlim([-distlimit, distlimit])
+        plt.show()
+
+    #calculates energy of system
+    def plot_energy(self):
+        energyList=[]
+        l=len(self.planets)
+        for i in range(self.nsteps):
+            energy=0
+            for j in range(l):
+                body1=self.planets[j]
+                energy+=0.5*body1.mass*lin.norm((body1.vellist[i]))**2
+                for k in range(j+1, l):
+                    body2=self.planets[k]
+                    r=lin.norm(body1.poslist[i]-body2.poslist[i])
+                    energy-=G*body1.mass*body2.mass/r
+            energyList.append(energy)
+        plt.plot(self.time, energyList)
+
+
+
+sim=Simulation()
+sim.propegate()
+sim.plot_3d()
+sim.plot_object("earth", 3)
+sim.plot_energy()
+
