@@ -5,158 +5,205 @@ import matplotlib.patches as mpatches
 
 import matplotlib.pyplot as plt
 
-G= 6.67408*(10**-11)
+G = 6.67408 * (10 ** -11)
+au=149597871
+yearinseconds=60*60*24*365
 
-#defines objects and their properties
+
+# defines objects and their properties
 class body():
-    def __init__(self, xPos, yPos, zpos, xVel, yVel, zvel,  mass, name):
-        self.poslist=[np.array([xPos, yPos, zpos])]
-        self.vellist=[np.array([xVel, yVel, zvel])]
-        self.acclist=[]
-        self.mass=mass
-        self.name=name
+    def __init__(self, xPos, yPos, zpos, xVel, yVel, zvel, mass, name):
+        self.poslist = [np.array([xPos, yPos, zpos])]
+        self.vellist = [np.array([xVel, yVel, zvel])]
+        self.acclist = [np.array([0.0, 0.0, 0.0])]
+        self.mass = mass
+        self.name = name
 
 
-#function returns a list of body-objects
+# function returns a list of body-objects
 def createBodies():
-    list=[]
-    earth=body(0, 1.496e11,0, 29.78e3,0,0, 5.972e24, "Earth")
-    sun = body(0,0,0,0,0,0,1.989e30, "Sun")
-
+    list = []
+    earth = body(0.0, 1.496e11, 0.0, -29.78e3, 0.0, 0.0, 5.972e24, "Earth")
+    sun = body(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.989e30, "Sun")
     list.append(earth)
     list.append(sun)
 
+    extra=deepcopy(earth)
+    extra.poslist[0][2]+=1e9
+    extra.poslist[0][1]+= 5e9
+    extra.vellist[0][0] += -40e2
+    extra.name="Extra"
+    #list.append(extra)
 
-    moon=deepcopy(earth)
-    moon.poslist[0][0]+=284400e3
-    moon.vellist[0][1]+=1.022e3
-    moon.name="Moon"
-    moon.mass=7.34e22
+    extra2=body(0.0, 1e11, 0.0, -8e3, 0.0, 0.0, 6e24, "Elliptical Orbit")
+    #list.append(extra2)
+
+    c60=np.cos(np.pi/3)
+    s60 = np.sin(np.pi / 3)
+
+    l4_object= body(s60*1.496e11, c60*1.496e11, 0, -29.78e3*c60, 29.78e3*s60, 0, 1, "L5 Object")
+    #list.append(l4_object)
+
+    moon = deepcopy(earth)
+    moon.poslist[0][0] += 384400e3
+    moon.vellist[0][1] += 1.022e3
+    moon.name = "Moon"
+    moon.mass = 7.34e22
     list.append(moon)
 
     comet = deepcopy(earth)
     comet.poslist[0][0] -= 300000e3
     comet.poslist[0][2] += 100000e3
-    comet.vellist[0][0] += 1.485e3
-    comet.name = "comet"
+    comet.vellist[0][0] += 1.48e3
+    comet.name = "Comet"
     comet.mass = 7e10
-    list.append(comet)
+    #list.append(comet)
 
     webb = deepcopy(earth)
-    webb.name = "webb"
+    webb.name = "Webb"
     webb.mass = 1000
-    webb.poslist[0][1]= (earth.poslist[0][1]*(1+(earth.mass/(3*sun.mass))**(1/3)))
-    webb.vellist[0][0]=earth.vellist[0][0]*(webb.poslist[0][1]/earth.poslist[0][1])
-    #list.append(webb)
+    webb.poslist[0][1] = (earth.poslist[0][1] * (1 + 0.99 * (earth.mass / (3 * sun.mass)) ** (1 / 3)))
+    webb.poslist[0][2] += 10000e3
+    webb.vellist[0][0] = earth.vellist[0][0] * (webb.poslist[0][1] / earth.poslist[0][1])*1.001810899138
+    list.append(webb)
+
+    venus=body(108e9, 0.0,0.0,0.0,35.02e3,0.0,4.86e24, "Venus")
+    #list.append(venus)
+
+    mars=body(-228e9,0,0,0,-24.077e3,0,6.41e23, "Mars")
+    #list.append(mars)
+
+    jupiter = body(0, -778e9, 0, 13.07e3, 0, 0, 1.9e27, "Jupiter")
+    #list.append(jupiter)
 
     return list
 
-#returns vector of force for two objects
+
+# returns vector of force for two objects
 def calculateForce(pos1, m1, pos2, m2):
-    dSquared=((lin.norm(pos1-pos2))**2)
-    vector=pos2-pos1
-    nVector=vector/lin.norm(pos1-pos2)
-    F=G*(m1*m2)/dSquared
+    dSquared = ((lin.norm(pos1 - pos2)) ** 2)
+    vector = pos2 - pos1
+    nVector = vector / lin.norm(pos1 - pos2)
+    F = G * (m1 * m2) / dSquared
 
-    return F*nVector
-
-#RK4 propegator
-def rk4(pos, vel, acc, dt):
-    a1=acc*dt
-    b1=vel*dt
+    return F * nVector
 
 
 
-#main class which holds the whole simulation
+
+# main class which holds the whole simulation
 class Simulation():
     def __init__(self):
-        self.planets=createBodies()
-        self.nsteps=int(5e4)
-        self.simulationTime=(365*24*60*60)*2
-        self.dt=int(self.simulationTime/self.nsteps)
-        self.time=[0]
+        self.planets = createBodies()
+        self.nsteps = int(1e5)
+        self.simulationTime = yearinseconds*4
+        self.dt = int(self.simulationTime / self.nsteps)
+        self.time = [0]
+        self.energy_list=[]
 
-
-    #propegates with velocity verlet
+    # propegates with velocity verlet
     def propegate(self):
-        l=len(self.planets)
+        l = len(self.planets)
 
-        #initial acceleration
-        for i in range(l):
-            for j in range(i+1, l):
-                planet1=self.planets[i]
-                planet2=self.planets[j]
-                force=calculateForce(planet1.poslist[0], planet1.mass, planet2.poslist[0], planet2. mass)
-                planet1.acclist.append(force/planet1.mass)
-                planet2.acclist.append(force/-planet2.mass)
+        # initial acc
+        for j in range(l):
+            for k in range(j + 1, l):
+                planet1 = self.planets[j]
+                planet2 = self.planets[k]
+                force = calculateForce(planet1.poslist[-1], planet1.mass, planet2.poslist[-1], planet2.mass)
 
+                planet1.acclist[-1] += (force / planet1.mass)
+                planet2.acclist[-1] += (force / -planet2.mass)
 
         for i in range(1, self.nsteps):
 
-            #Propegate pos
+            # Propegate pos
             for j in range(l):
-                planet=self.planets[j]
-                dt=self.dt
-                pos=planet.poslist[-1]
-                vel=planet.vellist[-1]
-                acc=planet.acclist[-1]
+                planet = self.planets[j]
+                dt = self.dt
+                pos = planet.poslist[-1]
+                vel = planet.vellist[-1]
+                acc = planet.acclist[-1]
+                planet.poslist.append(pos + (dt * vel) + (0.5 * acc * (dt ** 2)))
 
-                planet.poslist.append(pos+(dt*vel)+(0.5*acc*(dt**2)))
+            for j in range(l):
 
-                #planet.poslist.append(np.array(pos+(dt*vel)))
+                self.planets[j].acclist.append(np.array([0.0,0.0,0.0]))
+                self.planets[j].vellist.append(self.planets[j].vellist[-1])
 
-
-            #recalculate vel and acc
             for j in range(l):
                 for k in range(j + 1, l):
                     planet1 = self.planets[j]
                     planet2 = self.planets[k]
                     force = calculateForce(planet1.poslist[-1], planet1.mass, planet2.poslist[-1], planet2.mass)
-                    planet1.acclist.append(force / planet1.mass)
-                    planet2.acclist.append(force / -planet2.mass)
+                    planet1.acclist[-1] += (force / planet1.mass)
+                    planet2.acclist[-1] += (force / -planet2.mass)
 
-                    planet1.vellist.append(planet1.vellist[-1] + self.dt*(planet1.acclist[-2]+planet1.acclist[-1])/2)
-                    planet2.vellist.append(planet2.vellist[-1] + self.dt * (planet2.acclist[-2] + planet2.acclist[-1]) / 2)
+            for j in range(l):
+                planet=self.planets[j]
+                planet.vellist[-1] += self.dt * (planet.acclist[-2] + planet.acclist[-1]) / 2
 
-                    #planet1.vellist.append(planet1.vellist[-1] + self.dt * planet1.acclist[-1])
-                    #planet2.vellist.append(planet2.vellist[-1] + self.dt * planet2.acclist[-1])
+            self.time.append(i * self.dt)
 
 
-            self.time.append(i*dt)
+        #print(len(self.planets[0].acclist), len(self.planets[0].vellist), len(self.time))
 
-    #plot 2d projection of system and time on z-axis
+    def euler(self):
+        l=len(self.planets)
+
+        for k in range(1, self.nsteps):
+
+            for i in range (l):
+                for j in range(i+1, l):
+                    planet1 = self.planets[i]
+                    planet2 = self.planets[j]
+                    force = calculateForce(planet1.poslist[-1], planet1.mass, planet2.poslist[-1], planet2.mass)
+                    planet1.acclist[-1]+=(force / planet1.mass)
+                    planet2.acclist[-1]+=(force / -planet2.mass)
+
+            for i in range (l):
+                planet = self.planets[i]
+                planet.poslist.append(planet.poslist[-1] + self.dt * planet.vellist[-1])
+                planet.vellist.append(planet.vellist[-1] + self.dt * planet.acclist[-1])
+
+                planet.acclist.append(np.array([0.0,0.0,0.0]))
+
+            self.time.append(k * self.dt)
+
+
+
+
+    # plot 2d projection of system and time on z-axis
     def plot_elliptic(self):
         ax = plt.figure().add_subplot(projection='3d')
+
+        tlist=np.array(self.time)
+        tlist=tlist/yearinseconds
         for i in range(len(self.planets)):
-            x=[]
-            y=[]
-            poslist=self.planets[i].poslist
+            x = []
+            y = []
+            poslist = self.planets[i].poslist
             for j in range(len(poslist)):
-                x.append(poslist[j][0])
-                y.append(poslist[j][1])
-            ax.plot(x, y, self.time, label=self.planets[i].name)
+                x.append(poslist[j][0]/au)
+                y.append(poslist[j][1]/au)
+
+            ax.plot(x, y, tlist, label=self.planets[i].name)
             ax.legend()
+
+        ax.set_xlabel("Austronomical units")
+        ax.set_ylabel("Austronomical units")
+        ax.set_zlabel("Time (years)")
         plt.show()
 
-    def plot_2d(self):
-        for i in range(len(self.planets)):
-            x=[]
-            y=[]
-            poslist=self.planets[i].poslist
-            for j in range(len(poslist)):
-                x.append(poslist[j][0])
-                y.append(poslist[j][1])
-            plt.plot(x, y)
-        plt.show()
 
-    #plots trajectory in 3d
+    # plots trajectory in 3d
     def plot_3d(self):
         ax = plt.figure().add_subplot(projection='3d')
         for i in range(len(self.planets)):
-            x=[]
-            y=[]
-            z=[]
-            poslist=self.planets[i].poslist
+            x = []
+            y = []
+            z = []
+            poslist = self.planets[i].poslist
             for j in range(len(poslist)):
                 x.append(poslist[j][0])
                 y.append(poslist[j][1])
@@ -164,88 +211,226 @@ class Simulation():
             ax.plot(x, y, z, label=self.planets[i].name)
 
         ax.scatter([0], [0], [0], color="orange", s=20, label="Sun")
+        ax.set_zlim([-1e9, 1e9])
         ax.legend()
         plt.show()
 
-    #plot with an arbitrary object in it's center, ex earth an moon
-    #dim=3 gives 3d
-    #dim=2 gives 2d projection
+    # plot with an arbitrary object in it's center, ex earth an moon
+    # dim=3 gives 3d
+    # dim=2 gives 2d projection
     def plot_object(self, body, dim):
         target_index = 0
-        distlimit=300000e3
+        distlimit = 200000e4
         for i in range(len(self.planets)):
-            if self.planets[i].name==body:
-                target_index=i
+            if self.planets[i].name == body:
+                target_index = i
         print(target_index)
-        ref_pos=self.planets[target_index].poslist
+        ref_pos = self.planets[target_index].poslist
         ax = plt.figure().add_subplot(projection='3d')
 
-        colourlist="byrgmc"
-        patches=[]
+        colourlist = "yrgmc"
+        patches = []
 
         for i in range(len(self.planets)):
-            if i==target_index:
+            if i == target_index:
                 continue
-            broken=False
-            inScope=False
+            broken = False
+            inScope = False
             x = []
             y = []
             z = []
+            t = []
 
             for j in range(self.nsteps):
-                pos=(self.planets[i].poslist[j]-ref_pos[j])
 
-                if abs(pos[0])<distlimit and abs(pos[1])<distlimit and abs(pos[2])<distlimit:
-                    x.append(pos[0])
-                    y.append(pos[1])
-                    z.append(pos[2])
+                # rotate cordinate system in xy-plane with orbit of object. X-axis is always aligned with sun-earth
+                cos = ref_pos[j][1] / lin.norm(ref_pos[j])
+                sin = ref_pos[j][0] / lin.norm(ref_pos[j])
+                pos = (self.planets[i].poslist[j] - ref_pos[j])
+
+                xpos = cos * pos[0] - sin * pos[1]
+                ypos = sin * pos[0] + cos * pos[1]
+
+
+                # print(xpos, pos[0])
+
+                if abs(xpos) < distlimit and abs(ypos) < distlimit and abs(pos[2]) < distlimit:
+                    x.append(xpos/au)
+                    y.append(ypos/au)
+                    z.append(pos[2]/au)
+                    t.append(self.time[j]/yearinseconds)
                 else:
-                    broken=True
+                    broken = True
 
-                if (broken is True and len(x)!=0) or (j==(self.nsteps-1) and len(x)!=0):
-                    if dim==3:
+                if (broken is True and len(x) != 0) or (j == (self.nsteps - 1) and len(x) != 0):
+                    if dim == 3:
                         ax.plot(x, y, z, color=colourlist[i])
-                    elif dim==2:
-                        ax.plot(x, y, self.time, color=colourlist[i])
-                    x=[]
-                    y=[]
-                    z=[]
-                    broken=False
-                    inScope=True
+                    elif dim == 2:
+                        ax.plot(x, y, t, color=colourlist[i])
+                    x = []
+                    y = []
+                    z = []
+                    t = []
+                    broken = False
+                    inScope = True
 
             if inScope is True:
                 patches.append(mpatches.Patch(color=colourlist[i], label=self.planets[i].name))
 
-        ax.scatter([0], [0], [0], color="b", s=10)
+        if dim==3:
+            ax.scatter([0], [0], [0], color="b", s=10)
+            ax.set_zlim([-0.01*distlimit/au, 0.01*distlimit/au])
+            ax.set_zlabel("Austronomical units")
+            ax.set_xlim([-0.2 * distlimit / au, 0.3 * distlimit / au])
+            ax.set_ylim([-0.2 * distlimit / au, distlimit / au])
+        else:
+            tidlista=np.array(self.time)
+            ax.plot([0]*self.nsteps, [0]*self.nsteps, tidlista/yearinseconds, color="b")
+            ax.set_zlabel("Time (years)")
+            ax.set_xlim([-distlimit / au, distlimit / au])
+            ax.set_ylim([-distlimit / au, distlimit / au])
+
         patches.append(mpatches.Patch(color="b", label=self.planets[target_index].name))
 
         plt.legend(handles=patches)
-        ax.set_xlim([-distlimit, distlimit])
-        ax.set_ylim([-distlimit, distlimit])
-        #ax.set_zlim([-distlimit, distlimit])
+
+
+        ax.set_xlabel("Austronomical units")
+        ax.set_ylabel("Austronomical units")
+
         plt.show()
 
-    #calculates energy of system
-    def plot_energy(self):
-        energyList=[]
-        l=len(self.planets)
+    def calc_energy(self):
+        energyList = []
+        l = len(self.planets)
         for i in range(self.nsteps):
-            energy=0
+            energy = 0
             for j in range(l):
-                body1=self.planets[j]
-                energy+=0.5*body1.mass*lin.norm((body1.vellist[i]))**2
-                for k in range(j+1, l):
-                    body2=self.planets[k]
-                    r=lin.norm(body1.poslist[i]-body2.poslist[i])
-                    energy-=G*body1.mass*body2.mass/r
+                body1 = self.planets[j]
+                energy += 0.5 * body1.mass * (lin.norm((body1.vellist[i])) ** 2)
+                for k in range(j + 1, l):
+                    body2 = self.planets[k]
+                    r = lin.norm(body1.poslist[i] - body2.poslist[i])
+                    energy -= G * body1.mass * body2.mass / r
             energyList.append(energy)
-        plt.plot(self.time, energyList)
+        self.energy_list=energyList
 
+    # calculates energy of system
+    def plot_energy(self):
+
+        plt.plot(self.time, self.energy_list)
+        plt.show()
+
+    def plot_relative_speed_between_two_objects(self, object1, object2):
+        pos1list = []
+        pos2list = []
+        relativeposlist = []
+        dT = self.dt / yearinseconds
+
+        for i, x in enumerate(self.planets):
+            if self.planets[i].name == object1:
+                pos1list = self.planets[i].poslist
+            elif self.planets[i].name == object2:
+                pos2list = self.planets[i].poslist
+
+        for i in range(self.nsteps):
+            cos = pos1list[i][0] / lin.norm(pos1list[i])
+            sin = pos1list[i][1] / lin.norm(pos1list[i])
+            pos = (pos2list[i] - pos1list[i])
+            xpos = cos * pos[0] - sin * pos[1]
+            ypos = sin * pos[0] + cos * pos[1]
+            pos[0]=xpos
+            pos[1]=ypos
+            relativeposlist.append(pos)
+
+        vlist = []
+        tlist = []
+
+        for i in range(1, self.nsteps):
+            dist = lin.norm(relativeposlist[i - 1] - relativeposlist[i])
+            vlist.append(dist / self.dt)
+            tlist.append(self.time[i]/yearinseconds)
+
+        plt.plot(tlist, vlist, label="Speed of " + object2 + " relative " + object1)
+        plt.ylabel("Speed ($m/s$)")
+        plt.xlabel("Time (years)")
+        plt.legend()
+        plt.show()
+
+
+def energy_evaluator():
+    years=4
+    timestart=5e2
+    timestop=1e5
+    iterations=9
+    nsteplist=[]
+    ratio=timestop/timestart
+
+
+    dtlist=[]
+    difflist=[]
+
+    for i in range (iterations):
+        nsteplist.append(int(timestart*(ratio**(1/(iterations-1)))**i))
+
+    for i in range (iterations):
+        sim=Simulation()
+        sim.simulationTime=years*yearinseconds
+        sim.nsteps=nsteplist[i]
+        sim.dt=sim.simulationTime/sim.nsteps
+        sim.propegate()
+        sim.calc_energy()
+        energy=np.array(sim.energy_list)
+        timelist=np.array(sim.time)
+
+        print("iteration " + str(i), sim.dt)
+
+        dtlist.append(sim.dt)
+        j=1
+        while True:
+            if energy[j-1] < energy[j] and energy[j+1]<energy[j]:
+                ref1=energy[j]
+                break
+            j+=1
+        j=-2
+        while True:
+            if energy[j-1] < energy[j] and energy[j+1]<energy[j]:
+                ref2=energy[j]
+                break
+            j-=1
+        difflist.append(abs(ref1-ref2))
+
+
+        plt.plot(timelist/yearinseconds, energy, label="dt= " + str(int(sim.dt)))
+
+    plt.legend()
+    plt.xlabel("Years")
+    plt.ylabel("energy")
+    plt.show()
+
+
+    plt.plot(dtlist, difflist)
+    plt.scatter(dtlist, difflist)
+    plt.xlabel("dt")
+    plt.ylabel("Difference")
+    plt.title("Energy drift between first and last orbit")
+    plt.show()
 
 
 sim=Simulation()
-sim.propegate()
-sim.plot_3d()
-sim.plot_object("Earth", 3)
-sim.plot_energy()
+#sim.propegate()
+#sim.plot_object("Earth", 2)
+#sim.plot_elliptic()
+#energy_evaluator()
+#sim=Simulation()
+#sim.propegate()
+
+#sim.euler()
+#sim.plot_elliptic()
+#sim.calc_energy()
+#sim.plot_energy()
+
+#sim.plot_object("Earth", 2)
+#sim.plot_object("Earth", 3)
+#sim.plot_relative_speed_between_two_objects("Earth", "Webb")
 
